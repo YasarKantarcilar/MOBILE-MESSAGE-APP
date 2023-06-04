@@ -1,5 +1,16 @@
-import { SafeAreaView } from "react-native";
-import { useState, useEffect } from "react";
+import { db, auth } from "../firebase";
+import { useState, useEffect, useRef } from "react";
+import { onAuthStateChanged } from "firebase/auth";
+import {
+  SafeAreaView,
+  ScrollView,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
+  Text,
+  View,
+  Clipboard,
+} from "react-native";
 import {
   setDoc,
   collection,
@@ -7,21 +18,35 @@ import {
   doc,
   orderBy,
   query,
+  getDoc,
+  deleteDoc,
 } from "firebase/firestore";
-import { StyleSheet, Text, View } from "react-native";
-import { db } from "../firebase";
-import { TextInput } from "react-native";
-import { TouchableOpacity } from "react-native";
-import { ScrollView } from "react-native";
-import { auth } from "../firebase";
-import { onAuthStateChanged } from "firebase/auth";
-import { getDoc } from "firebase/firestore";
 
 export default function Chat({ navigation }) {
+  const [isSending, setIsSending] = useState(false);
   const [userData, setuserData] = useState([]);
   const msgColRef = collection(db, "messages");
   const [data, setData] = useState([]);
   const [msgValue, setMsgValue] = useState("");
+  const [currentDate, setCurrentDate] = useState(new Date().toUTCString());
+  const minDate = new Date()
+    .toISOString()
+    .split("T")[1]
+    .split(".")[0]
+    .split(":")[0];
+  const hour = parseInt(minDate) + 3;
+  const minute = new Date()
+    .toISOString()
+    .split("T")[1]
+    .split(".")[0]
+    .split(":")[1];
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentDate(new Date().toUTCString());
+    }, 60000);
+    return () => clearInterval(interval);
+  }, []);
+
   useEffect(() => {
     const colRef = collection(db, "messages");
     const q = query(colRef, orderBy("date", "asc"));
@@ -37,7 +62,7 @@ export default function Chat({ navigation }) {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
-        console.log(user);
+        console.log("KULLANICI GIRISI BASARILI");
       } else {
         navigation.navigate("Login");
       }
@@ -54,31 +79,112 @@ export default function Chat({ navigation }) {
       });
     }
   }, [auth]);
+
+  const scrollViewRef = useRef();
   return (
     <>
       <SafeAreaView style={styles.container}>
-        <ScrollView style={styles.scrollView}>
-          {data.map((msg, idx) => (
-            <View
-              key={idx}
-              style={[
-                styles.areaContainer,
-                {
-                  alignItems:
-                    msg.sentBy == auth.currentUser.uid
-                      ? "flex-end"
-                      : "flex-start",
-                },
-              ]}
-            >
-              <View style={styles.textContainer}>
-                <Text style={{ color: "whitesmoke", textAlign: "center" }}>
-                  {msg.sentByName}
-                </Text>
-                <Text style={styles.text}>{msg.text}</Text>
-              </View>
-            </View>
-          ))}
+        <ScrollView
+          ref={scrollViewRef}
+          onContentSizeChange={() =>
+            scrollViewRef.current.scrollToEnd({ animated: true })
+          }
+          style={styles.scrollView}
+        >
+          {data.map((msg, idx) =>
+            msg.sentBy == auth.currentUser.uid ? (
+              <TouchableOpacity
+                onLongPress={() => {
+                  setIsSending(true);
+                  const docRef = doc(db, "messages", msg.id);
+
+                  deleteDoc(docRef)
+                    .then(() => {
+                      setIsSending(false);
+                    })
+                    .catch((error) => {
+                      console.error("Error deleting document:", error);
+                    });
+                }}
+                key={idx}
+                style={[
+                  styles.areaContainer,
+                  {
+                    alignItems:
+                      msg.sentBy == auth.currentUser.uid
+                        ? "flex-end"
+                        : "flex-start",
+                  },
+                ]}
+              >
+                <View style={styles.textContainer}>
+                  <Text
+                    style={{
+                      color: "gray",
+                      position: "absolute",
+                      top: 0,
+                      right: 0,
+                    }}
+                  >
+                    {msg.sentByName}
+                  </Text>
+
+                  <Text style={styles.text}>{msg.text}</Text>
+                  <Text
+                    style={[
+                      styles.time,
+                      {
+                        right: 0,
+                      },
+                    ]}
+                  >
+                    {msg.sendTime}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity
+                onLongPress={() => {
+                  Clipboard.setString(`${msg.text}`);
+                }}
+                key={idx}
+                style={[
+                  styles.areaContainer,
+                  {
+                    alignItems:
+                      msg.sentBy == auth.currentUser.uid
+                        ? "flex-end"
+                        : "flex-start",
+                  },
+                ]}
+              >
+                <View style={styles.textContainer}>
+                  <Text
+                    style={{
+                      color: "gray",
+                      position: "absolute",
+                      top: 0,
+                      left: 0,
+                    }}
+                  >
+                    {msg.sentByName}
+                  </Text>
+
+                  <Text style={styles.text}>{msg.text}</Text>
+                  <Text
+                    style={[
+                      styles.time,
+                      {
+                        left: 0,
+                      },
+                    ]}
+                  >
+                    {msg.sendTime}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            )
+          )}
         </ScrollView>
         <View style={styles.inputContainer}>
           <TextInput
@@ -89,14 +195,16 @@ export default function Chat({ navigation }) {
           />
           <TouchableOpacity
             onPress={() => {
+              setIsSending(true);
               setDoc(doc(msgColRef), {
                 text: msgValue,
                 date: new Date(),
                 sentBy: auth.currentUser.uid,
                 sentByName: userData.name,
+                sendTime: hour + ":" + minute,
               })
                 .then((x) => {
-                  console.log(x);
+                  setIsSending(false);
                 })
                 .catch((error) =>
                   console.error("Error writing document: ", error)
@@ -108,15 +216,16 @@ export default function Chat({ navigation }) {
               borderRadius: 50,
               width: 60,
               height: 60,
-              backgroundColor: "#2E4F4F",
+              backgroundColor: "white",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
+              display: isSending ? "none" : "flex",
             }}
           >
             <Text
               style={{
-                color: "#CBE4DE",
+                color: "black",
                 fontSize: 30,
               }}
             >
@@ -132,7 +241,6 @@ export default function Chat({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    marginTop: 30,
     display: "flex",
     flexDirection: "column",
     backgroundColor: "#2C3333",
@@ -147,17 +255,18 @@ const styles = StyleSheet.create({
   },
   textContainer: {
     backgroundColor: "#2E4F4F",
-    borderRadius: 15,
+    borderRadius: 5,
+    paddingHorizontal: 15,
+    paddingVertical: 20,
     maxWidth: 250,
+    position: "relative",
+    paddingBottom: 15,
   },
   text: {
     color: "#CBE4DE",
     minWidth: 50,
-    paddingHorizontal: 20,
-    paddingVertical: 10,
+    paddingHorizontal: 30,
     lineHeight: 20,
-    marginTop: 5,
-    minHeight: 50,
   },
   inputContainer: {
     display: "flex",
@@ -174,6 +283,15 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderRadius: 10,
     textAlign: "center",
-    backgroundColor: "#CBE4DE",
+    backgroundColor: "white",
+  },
+  scrollView: {
+    marginTop: 30,
+    paddingBottom: 30,
+  },
+  time: {
+    color: "gray",
+    position: "absolute",
+    bottom: 0,
   },
 });

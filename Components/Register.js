@@ -21,7 +21,7 @@ const Register = ({ navigation }) => {
         .then((userCred) => {
           const userId = userCred.user.uid;
           setDoc(doc(colRef, userId), {
-            name: form.name,
+            name: form.name.substring(0, 10).replace(/\s/g, ""),
             mail: form.email,
             password: form.password,
             uid: userId,
@@ -39,7 +39,7 @@ const Register = ({ navigation }) => {
     }
   }
 
-  console.log(form.email);
+  console.log(form.name.substring(0, 10).replace(/\s/g, ""));
   console.log(form.password);
   return (
     <View style={styles.container}>

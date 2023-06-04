@@ -9,30 +9,54 @@ import { auth } from "../firebase";
 import { useEffect } from "react";
 
 const Login = ({ navigation }) => {
+  const [isLogged, setIsLogged] = useState();
+  const [text, setText] = useState("");
   const [form, setForm] = useState({
     email: "",
     password: "",
   });
 
   function handleLogin() {
-    signInWithEmailAndPassword(auth, form.email, form.password).then((cred) =>
-      console.log(cred)
-    );
+    signInWithEmailAndPassword(auth, form.email, form.password)
+      .then((cred) => console.log("KULLANICI GIRIS YAPTI"))
+      .catch((err) => setText("KULLANICI ADI VEYA ŞİFRE HATALI"));
   }
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
-        console.log(user);
+        setIsLogged(true);
         navigation.navigate("Chat");
       } else {
+        setIsLogged(false);
         console.log("User is signed out.");
       }
     });
 
     return () => unsubscribe();
   }, [auth]);
-  return (
+  return isLogged ? (
+    <View
+      style={{
+        height: "100%",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+    >
+      <TouchableOpacity
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <Text onPress={() => navigation.navigate("Chat")} style={styles.button}>
+          CHATE GIT
+        </Text>
+      </TouchableOpacity>
+    </View>
+  ) : (
     <View style={styles.container}>
       <TextInput
         onChangeText={(value) => setForm({ ...form, email: value })}
@@ -53,6 +77,7 @@ const Login = ({ navigation }) => {
       >
         <Text style={styles.link}>KAYIT OL</Text>
       </TouchableOpacity>
+      <Text>{text}</Text>
     </View>
   );
 };
